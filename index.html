@@ -389,6 +389,72 @@
         .loading-text, .empty-text {
             color: var(--file-list-color) !important;
         }
+        
+        /* 路径显示优化 */
+        .current-path-container {
+            max-width: 100%;
+            position: relative;
+        }
+        
+        .current-path-text {
+            color: rgba(255, 255, 255, 0.7) !important;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            display: block;
+            cursor: default;
+            transition: all 0.3s ease;
+        }
+        
+        .current-path-text:hover {
+            white-space: normal;
+            overflow: visible;
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 8px 12px;
+            border-radius: 8px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            word-break: break-all;
+        }
+        
+        @media (max-width: 768px) {
+            .current-path-text {
+                max-width: 200px;
+            }
+            
+            .current-path-text:hover {
+                max-width: 300px;
+            }
+        }
+        
+        /* 顶部导航布局优化 */
+        .top-nav-content {
+            flex: 1;
+            min-width: 0; /* 允许内容收缩 */
+        }
+        
+        .top-nav-buttons {
+            flex-shrink: 0;
+        }
+        
+        /* 分享按钮样式 */
+        .btn-share {
+            background: rgba(69, 98, 115, 0.2);
+            border: 1px solid rgba(69, 98, 115, 0.5);
+            color: var(--file-list-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-share:hover {
+            background: rgba(69, 98, 115, 0.3);
+            border-color: rgba(69, 98, 115, 0.8);
+            color: var(--file-list-color);
+        }
     </style>
 </head>
 <body>
@@ -486,13 +552,18 @@
                     <button class="btn btn-primary d-lg-none" onclick="toggleSidebar()">
                         <i class="bi bi-list"></i>
                     </button>
-                    <div>
+                    <div class="top-nav-content">
                         <h4 class="text-white mb-1">文件管理器</h4>
-                        <p class="text-white-50 mb-0" id="currentPath">cdnData/</p>
+                        <div class="current-path-container">
+                            <span class="current-path-text" id="currentPath" title="点击查看完整路径">cdnData/</span>
+                        </div>
                     </div>
-                    <div class="d-flex">
+                    <div class="top-nav-buttons d-flex">
                         <button class="btn btn-primary me-2" onclick="refreshFiles()">
                             <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                        <button class="btn btn-share me-2" onclick="shareCurrentPath()" title="分享当前路径">
+                            <i class="bi bi-share"></i> 分享
                         </button>
                         <button class="btn btn-outline-light" onclick="showUploadModal()">
                             <i class="bi bi-upload"></i> 上传
@@ -590,6 +661,33 @@
         let currentFolders = [];
         let currentPath = '';
         
+        // URL参数处理函数
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            const results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+        
+        function updateUrlParameter(path) {
+            const url = new URL(window.location);
+            if (path) {
+                url.searchParams.set('path', path);
+            } else {
+                url.searchParams.delete('path');
+            }
+            window.history.replaceState({}, '', url);
+        }
+        
+        function getShareableUrl(path = null) {
+            const targetPath = path !== null ? path : currentPath;
+            const url = new URL(window.location.origin + window.location.pathname);
+            if (targetPath) {
+                url.searchParams.set('path', targetPath);
+            }
+            return url.toString();
+        }
+        
         // 切换侧边栏（移动端）
         function toggleSidebar() {
             document.body.classList.toggle('sidebar-open');
@@ -598,8 +696,16 @@
         // 导航到指定路径
         function navigateTo(path) {
             currentPath = path;
+            updateUrlParameter(path);
             loadFiles(path);
             updateBreadcrumb(path);
+        }
+        
+        // 分享当前路径
+        function shareCurrentPath() {
+            const shareUrl = getShareableUrl();
+            copyToClipboard(shareUrl);
+            showToast('分享链接已复制到剪贴板！');
         }
         
         // 加载文件列表
@@ -638,7 +744,8 @@
             $('#totalSize').text(data.total_size);
             
             // 更新当前路径显示
-            $('#currentPath').text(`cdnData/${currentPath}`.replace(/\/$/, ''));
+            const fullPath = `cdnData/${currentPath}`.replace(/\/$/, '');
+            $('#currentPath').text(fullPath).attr('title', fullPath);
             
             // 更新文件夹列表
             updateFolderList(currentFolders);
@@ -695,6 +802,7 @@
             let html = '';
             folders.forEach(folder => {
                 const fullPath = currentPath ? `${currentPath}/${folder.name}` : folder.name;
+                const shareUrl = getShareableUrl(fullPath);
                 html += `
                     <div class="col-md-6 col-lg-4 mb-3">
                         <div class="folder-item" onclick="navigateTo('${fullPath}')">
@@ -706,9 +814,14 @@
                                         <small>${folder.modified}</small>
                                     </div>
                                 </div>
-                                <button class="btn btn-sm btn-outline-light copy-btn" onclick="event.stopPropagation(); copyFolderUrl('${folder.path}')" title="复制文件夹路径">
-                                    <i class="bi bi-clipboard"></i>
-                                </button>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-light copy-btn" onclick="event.stopPropagation(); copyFolderUrl('${folder.path}')" title="复制文件夹路径">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-share copy-btn" onclick="event.stopPropagation(); copyToClipboard('${shareUrl}'); showToast('文件夹分享链接已复制！');" title="分享文件夹">
+                                        <i class="bi bi-share"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -749,8 +862,11 @@
                         <td class="text-nowrap">${file.modified}</td>
                         <td>
                             <div class="btn-group">
-                                <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyFileUrl('${fileUrl}')" title="复制链接">
+                                <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyFileUrl('${fileUrl}')" title="复制文件链接">
                                     <i class="bi bi-clipboard"></i>
+                                </button>
+                                <button class="btn btn-sm btn-share copy-btn" onclick="copyToClipboard('${getShareableUrl()}'); showToast('页面分享链接已复制！');" title="分享当前页面">
+                                    <i class="bi bi-share"></i>
                                 </button>
                                 <a href="${fileUrl}" class="btn btn-sm btn-primary" download title="下载文件">
                                     <i class="bi bi-download"></i>
@@ -870,8 +986,20 @@
         
         // 页面加载完成后初始化
         $(document).ready(function() {
-            // 初始加载
-            loadFiles();
+            // 检查URL参数中的路径
+            const urlPath = getUrlParameter('path');
+            
+            // 如果有服务器注入的初始路径，优先使用
+            if (typeof initialPathFromURL !== 'undefined' && initialPathFromURL) {
+                navigateTo(initialPathFromURL);
+            } else if (urlPath) {
+                // 否则使用URL参数中的路径
+                navigateTo(urlPath);
+            } else {
+                // 初始加载根目录
+                loadFiles();
+            }
+            
             loadSystemStats();
             
             // 每30秒自动刷新一次文件列表
