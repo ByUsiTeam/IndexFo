@@ -24,10 +24,8 @@ try:
     from rich.panel import Panel
     from rich.table import Table
     
-    # 安装Rich回溯处理
     install_rich_traceback(show_locals=True)
     
-    # 配置Rich日志处理器
     logging.basicConfig(
         level=logging.INFO,
         format="%(message)s",
@@ -44,12 +42,13 @@ except ImportError:
 # 配置
 CONFIG = {
     "host": "0.0.0.0",
-    "port": 8000,
+    "port": 7060,
     "cdn_data_folder": "cdnData",
     "theme_color": "#FF0000",
     "blur_intensity": "25px",
     "site_title": "ByUsiCDN - Index Fo",
-    "html_file": "index.html"
+    "html_file": "index.html",
+    "protected_paths": ["/api"]
 }
 
 class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -57,6 +56,7 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
     
     def __init__(self, *args, **kwargs):
         self.cdn_path = Path(CONFIG["cdn_data_folder"])
+        self.protected_paths = CONFIG["protected_paths"]
         self.html_content = self.load_html_template()
         super().__init__(*args, **kwargs)
     
@@ -108,12 +108,52 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
         else:
             super().log_error(format, *args)
     
+    def translate_path(self, path):
+        """重写路径转换，将根路径映射到 cdnData 目录"""
+        # 检查保护路径
+        for protected_path in self.protected_paths:
+            if path.startswith(protected_path):
+                self.log_error("尝试访问保护路径: %s", path)
+                return "/dev/null"  # 返回不存在的路径
+        
+        # 解析路径
+        path = urllib.parse.unquote(path)
+        path = path.split('?', 1)[0]
+        path = path.split('#', 1)[0]
+        
+        # 特殊路径处理
+        if path in ['/', '']:
+            # 根路径返回首页
+            return str(Path.cwd() / CONFIG["html_file"])
+        
+        # 将URL路径映射到cdnData目录
+        if path.startswith('/'):
+            path = path[1:]
+        
+        # 构建实际文件路径
+        file_path = self.cdn_path / path
+        
+        # 安全检查：确保路径在cdnData目录内
+        try:
+            file_path.resolve().relative_to(self.cdn_path.resolve())
+        except ValueError:
+            self.log_error("路径遍历攻击尝试: %s", path)
+            return "/dev/null"
+        
+        return str(file_path)
+    
     def do_GET(self):
         """处理GET请求"""
         try:
             parsed_path = urllib.parse.urlparse(self.path)
             path = parsed_path.path
             query_params = urllib.parse.parse_qs(parsed_path.query)
+            
+            # 检查保护路径
+            for protected_path in self.protected_paths:
+                if path.startswith(protected_path):
+                    self.send_error(403, "禁止访问保护目录")
+                    return
             
             if path == '/':
                 # 处理根路径，支持path参数
@@ -132,12 +172,55 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                 target_path = query_params.get('path', [''])[0]
                 self.serve_navigate_api(target_path)
             else:
-                # 默认文件服务
-                super().do_GET()
+                # 文件服务 - 使用自定义的路径映射
+                self.serve_static_file(path)
                 
         except Exception as e:
             self.log_error("处理请求时出错: %s", str(e))
             self.send_error(500, f"服务器内部错误: {str(e)}")
+    
+    def serve_static_file(self, path):
+        """服务静态文件"""
+        try:
+            # 使用translate_path获取实际文件路径
+            file_path = self.translate_path(path)
+            
+            # 检查文件是否存在
+            if not os.path.exists(file_path) or file_path == "/dev/null":
+                self.send_error(404, "文件不存在")
+                return
+            
+            # 确定MIME类型
+            ext = os.path.splitext(file_path)[1]
+            mime_types = {
+                '.txt': 'text/plain',
+                '.html': 'text/html',
+                '.css': 'text/css',
+                '.js': 'application/javascript',
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.pdf': 'application/pdf',
+                '.zip': 'application/zip'
+            }
+            
+            content_type = mime_types.get(ext.lower(), 'application/octet-stream')
+            
+            # 读取并发送文件
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            
+            self.send_response(200)
+            self.send_header('Content-type', content_type)
+            self.send_header('Content-Length', str(len(file_data)))
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(file_data)
+            
+        except Exception as e:
+            self.log_error("服务文件时出错: %s", str(e))
+            self.send_error(500, f"服务文件时出错: {str(e)}")
     
     def serve_index(self, target_path: str = ""):
         """服务首页，支持路径参数"""
@@ -217,6 +300,13 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             filename = path.replace('/download/', '')
             file_path = self.cdn_path / urllib.parse.unquote(filename)
+            
+            # 安全检查
+            try:
+                file_path.resolve().relative_to(self.cdn_path.resolve())
+            except ValueError:
+                self.send_error(403, "禁止访问")
+                return
             
             if not file_path.exists() or not file_path.is_file():
                 self.send_error(404, "文件不存在")
@@ -326,7 +416,11 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
     def get_system_stats(self) -> Dict[str, Any]:
         """获取系统统计信息"""
         import platform
-        import psutil
+        try:
+            import psutil
+            HAS_PSUTIL = True
+        except ImportError:
+            HAS_PSUTIL = False
         
         try:
             # 获取系统信息
@@ -337,30 +431,37 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "hostname": platform.node()
             }
             
-            # 获取内存使用情况
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage('.')
-            
-            # 获取服务器运行时间
-            boot_time = datetime.fromtimestamp(psutil.boot_time())
-            uptime = datetime.now() - boot_time
-            
-            return {
+            stats = {
                 "system": system_info,
-                "memory": {
-                    "total": self.format_file_size(memory.total),
-                    "used": self.format_file_size(memory.used),
-                    "percent": memory.percent
-                },
-                "disk": {
-                    "total": self.format_file_size(disk.total),
-                    "used": self.format_file_size(disk.used),
-                    "percent": disk.percent
-                },
-                "uptime": str(uptime).split('.')[0]  # 去除微秒部分
+                "uptime": "未知"
             }
-        except ImportError:
-            return {"error": "需要psutil库来获取系统信息"}
+            
+            if HAS_PSUTIL:
+                # 获取内存使用情况
+                memory = psutil.virtual_memory()
+                disk = psutil.disk_usage('.')
+                
+                # 获取服务器运行时间
+                boot_time = datetime.fromtimestamp(psutil.boot_time())
+                uptime = datetime.now() - boot_time
+                
+                stats.update({
+                    "memory": {
+                        "total": self.format_file_size(memory.total),
+                        "used": self.format_file_size(memory.used),
+                        "percent": memory.percent
+                    },
+                    "disk": {
+                        "total": self.format_file_size(disk.total),
+                        "used": self.format_file_size(disk.used),
+                        "percent": disk.percent
+                    },
+                    "uptime": str(uptime).split('.')[0]  # 去除微秒部分
+                })
+            else:
+                stats["error"] = "需要psutil库来获取完整系统信息"
+                
+            return stats
         except Exception as e:
             return {"error": str(e)}
     
@@ -415,6 +516,7 @@ def display_banner():
     
     info_table.add_row("访问地址:", f"http://{CONFIG['host']}:{CONFIG['port']}")
     info_table.add_row("数据文件夹:", str(Path(CONFIG['cdn_data_folder']).absolute()))
+    info_table.add_row("保护路径:", ", ".join(CONFIG['protected_paths']))
     info_table.add_row("主题颜色:", CONFIG['theme_color'])
     info_table.add_row("模糊效果:", CONFIG['blur_intensity'])
     
@@ -443,9 +545,16 @@ def main():
         with socketserver.TCPServer((CONFIG["host"], CONFIG["port"]), handler) as httpd:
             if HAS_RICH:
                 console.print(f"\n🎉 [bold green]服务器启动成功![/bold green]")
+                console.print(f"\n📁 文件访问示例:")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/i.txt")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/your-file.pdf")
+                console.print(f"\n⛔ 保护路径:")
+                for path in CONFIG['protected_paths']:
+                    console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}{path}")
                 console.print(f"\n⏹️  [bold yellow]按 Ctrl+C 停止服务器[/bold yellow]\n")
             else:
                 print(f"\n服务器启动成功!")
+                print(f"文件访问示例: http://{CONFIG['host']}:{CONFIG['port']}/i.txt")
                 print(f"按 Ctrl+C 停止服务器\n")
             
             # 启动服务器
