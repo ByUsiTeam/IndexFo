@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ByUsiCDN - Index Fo 服务器
-支持文件夹导航和优化的UI配色
+支持URL参数路径分享和优化的UI
 """
 
 import http.server
@@ -116,7 +116,9 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             query_params = urllib.parse.parse_qs(parsed_path.query)
             
             if path == '/':
-                self.serve_index()
+                # 处理根路径，支持path参数
+                target_path = query_params.get('path', [''])[0]
+                self.serve_index(target_path)
             elif path == '/api/files':
                 # 支持路径参数
                 target_path = query_params.get('path', [''])[0]
@@ -137,16 +139,39 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.log_error("处理请求时出错: %s", str(e))
             self.send_error(500, f"服务器内部错误: {str(e)}")
     
-    def serve_index(self):
-        """服务首页"""
+    def serve_index(self, target_path: str = ""):
+        """服务首页，支持路径参数"""
         try:
+            # 注入路径参数到HTML中
+            html_content = self.inject_path_parameter(self.html_content, target_path)
+            
             self.send_response(200)
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
-            self.wfile.write(self.html_content.encode('utf-8'))
+            self.wfile.write(html_content.encode('utf-8'))
         except Exception as e:
             self.log_error("服务首页时出错: %s", str(e))
             self.send_error(500, f"服务首页时出错: {str(e)}")
+    
+    def inject_path_parameter(self, html_content: str, path: str) -> str:
+        """将路径参数注入到HTML中"""
+        if not path:
+            return html_content
+        
+        # 使用JavaScript变量注入路径参数
+        script_injection = f'''
+        <script>
+            // 从URL参数注入的初始路径
+            const initialPathFromURL = "{self.escape_js_string(path)}";
+        </script>
+        '''
+        
+        # 在head标签结束前注入
+        return html_content.replace('</head>', f'{script_injection}</head>')
+    
+    def escape_js_string(self, s: str) -> str:
+        """转义字符串用于JavaScript"""
+        return s.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'").replace('\n', '\\n').replace('\r', '\\r')
     
     def serve_files_api(self, target_path: str = ""):
         """服务文件列表API"""
