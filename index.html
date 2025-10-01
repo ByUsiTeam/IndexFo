@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByUsiCDN - Index Fo</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdifit.cn/cdn/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.13.1/font/bootstrap-icons.css">
+    
+    <!-- 自定义样式 -->
+    <style>
+        :root {
+            --primary-color: #FF0000;
+            --blur-intensity: 25px;
+            --glass-opacity: 0.15;
+            --file-list-color: #456273; /* 新增文件列表颜色变量 */
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        
+        /* 玻璃态效果 */
+        .glass-sidebar {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, var(--glass-opacity));
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+        }
+        
+        /* 按钮样式 */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #cc0000);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #ff1a1a, #b30000);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 0, 0, 0.4);
+        }
+        
+        .btn-outline-light {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            padding: 8px 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-outline-light:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+        
+        /* 文件项样式 - 使用 #456273 配色 */
+        .file-item {
+            transition: all 0.3s ease;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(69, 98, 115, 0.3);
+            background: rgba(69, 98, 115, 0.1);
+        }
+        
+        .file-item:hover {
+            background: rgba(69, 98, 115, 0.2);
+            border-color: rgba(69, 98, 115, 0.5);
+            transform: translateX(5px);
+        }
+        
+        .file-item td {
+            color: var(--file-list-color) !important;
+            border-color: rgba(69, 98, 115, 0.2) !important;
+            padding: 12px 8px !important;
+        }
+        
+        .file-item .text-white-50 {
+            color: rgba(69, 98, 115, 0.8) !important;
+        }
+        
+        /* 文件夹项样式 */
+        .folder-item {
+            background: rgba(69, 98, 115, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(69, 98, 115, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .folder-item:hover {
+            background: rgba(69, 98, 115, 0.2);
+            transform: translateX(5px);
+            border-color: rgba(69, 98, 115, 0.5);
+        }
+        
+        .folder-item h6 {
+            color: var(--file-list-color) !important;
+        }
+        
+        .folder-item .text-white-50 {
+            color: rgba(69, 98, 115, 0.8) !important;
+        }
+        
+        /* 复制按钮 */
+        .copy-btn {
+            opacity: 0.7;
+            transition: all 0.3s ease;
+            color: var(--file-list-color) !important;
+            border-color: rgba(69, 98, 115, 0.5) !important;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(69, 98, 115, 0.2) !important;
+            border-color: rgba(69, 98, 115, 0.8) !important;
+        }
+        
+        .file-item:hover .copy-btn,
+        .folder-item:hover .copy-btn {
+            opacity: 1;
+        }
+        
+        /* 侧边栏链接 */
+        .sidebar-link {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            display: block;
+            margin: 4px 0;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar-link:hover,
+        .sidebar-link.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: var(--primary-color);
+            transform: translateX(5px);
+        }
+        
+        /* 统计卡片 */
+        .stats-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 10px 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #ffffff, #cccccc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* 面包屑导航 */
+        .breadcrumb-nav {
+            background: rgba(69, 98, 115, 0.1);
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(69, 98, 115, 0.3);
+        }
+        
+        .breadcrumb-item a {
+            color: rgba(69, 98, 115, 0.8);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .breadcrumb-item a:hover {
+            color: var(--file-list-color);
+        }
+        
+        .breadcrumb-item.active {
+            color: var(--file-list-color);
+            font-weight: 600;
+        }
+        
+        .breadcrumb {
+            --bs-breadcrumb-divider-color: rgba(69, 98, 115, 0.6);
+        }
+        
+        /* 进度条 */
+        .progress {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary-color), #ff6666);
+            border-radius: 10px;
+        }
+        
+        /* 移动端样式 */
+        @media (max-width: 768px) {
+            .glass-sidebar {
+                position: fixed;
+                top: 0;
+                left: -100%;
+                width: 280px;
+                height: 100vh;
+                z-index: 1050;
+                transition: left 0.3s ease;
+            }
+            
+            .sidebar-open .glass-sidebar {
+                left: 0;
+            }
+            
+            .mobile-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(5px);
+                z-index: 1040;
+            }
+            
+            .sidebar-open .mobile-overlay {
+                display: block;
+            }
+            
+            :root {
+                --blur-intensity: 15px;
+            }
+            
+            .file-item td {
+                padding: 8px 4px !important;
+                font-size: 0.9rem;
+            }
+        }
+        
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        /* 徽章样式 - 使用 #456273 配色 */
+        .badge-file {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-folder {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-image {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-document {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-archive {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-video {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-audio {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        .badge-executable {
+            background: rgba(69, 98, 115, 0.3);
+            color: var(--file-list-color) !important;
+            border: 1px solid rgba(69, 98, 115, 0.5);
+        }
+        
+        /* 表格样式优化 */
+        .table-hover tbody tr:hover {
+            background-color: rgba(69, 98, 115, 0.15) !important;
+        }
+        
+        .table th {
+            color: var(--file-list-color) !important;
+            border-color: rgba(69, 98, 115, 0.3) !important;
+            background: rgba(69, 98, 115, 0.1) !important;
+            font-weight: 600;
+        }
+        
+        /* 操作按钮组 */
+        .btn-group .btn {
+            border-radius: 6px !important;
+            margin: 0 2px;
+        }
+        
+        /* 文件列表区域标题 */
+        .file-list-title {
+            color: var(--file-list-color) !important;
+        }
+        
+        /* 图标颜色调整 */
+        .file-list-icon {
+            color: rgba(69, 98, 115, 0.8) !important;
+        }
+        
+        /* 加载状态和空状态 */
+        .loading-text, .empty-text {
+            color: var(--file-list-color) !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- 移动端遮罩 -->
+    <div class="mobile-overlay" onclick="toggleSidebar()"></div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-lg-3 col-xl-2 glass-sidebar vh-100 position-fixed">
+                <div class="p-4 h-100 d-flex flex-column">
+                    <!-- 网站标题 -->
+                    <div class="text-center mb-4 fade-in">
+                        <h3 class="text-white fw-bold mb-2">
+                            <i class="bi bi-cloud-arrow-down-fill me-2" style="color: var(--primary-color);"></i>
+                            ByUsiCDN
+                        </h3>
+                        <p class="text-white-50 mb-0">Index Fo - 文件分发系统</p>
+                    </div>
+                    
+                    <!-- 统计信息 -->
+                    <div class="stats-card text-white fade-in">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span><i class="bi bi-folder me-2"></i>文件夹:</span>
+                            <span id="folderCount" class="fw-bold stat-number">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span><i class="bi bi-file-earmark me-2"></i>文件:</span>
+                            <span id="fileCount" class="fw-bold stat-number">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-hdd me-2"></i>总大小:</span>
+                            <span id="totalSize" class="fw-bold">0 B</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 系统状态 -->
+                    <div class="stats-card text-white fade-in">
+                        <h6 class="mb-3"><i class="bi bi-graph-up me-2"></i>系统状态</h6>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>内存使用:</span>
+                                <span id="memoryPercent">0%</span>
+                            </div>
+                            <div class="progress">
+                                <div id="memoryProgress" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>磁盘使用:</span>
+                                <span id="diskPercent">0%</span>
+                            </div>
+                            <div class="progress">
+                                <div id="diskProgress" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 导航链接 -->
+                    <div class="mt-3 flex-grow-1">
+                        <a href="#" class="sidebar-link active" onclick="navigateTo('')">
+                            <i class="bi bi-house me-2"></i>根目录
+                        </a>
+                        <a href="#" class="sidebar-link" onclick="showUploadModal()">
+                            <i class="bi bi-upload me-2"></i>文件上传
+                        </a>
+                        <a href="#" class="sidebar-link">
+                            <i class="bi bi-speedometer2 me-2"></i>系统监控
+                        </a>
+                        <a href="#" class="sidebar-link">
+                            <i class="bi bi-shield-check me-2"></i>安全设置
+                        </a>
+                        <a href="#" class="sidebar-link">
+                            <i class="bi bi-gear me-2"></i>系统配置
+                        </a>
+                    </div>
+                    
+                    <!-- 底部信息 -->
+                    <div class="mt-auto">
+                        <div class="text-center text-white-50 small">
+                            <div class="glass-panel p-3">
+                                <p class="mb-1" id="serverUptime">运行时间: 加载中...</p>
+                                <p class="mb-0">© 2025 ByUsi</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 主内容区 -->
+            <div class="col-lg-9 col-xl-10 offset-lg-3 offset-xl-2 p-4">
+                <!-- 顶部导航 -->
+                <div class="d-flex justify-content-between align-items-center mb-4 fade-in">
+                    <button class="btn btn-primary d-lg-none" onclick="toggleSidebar()">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <div>
+                        <h4 class="text-white mb-1">文件管理器</h4>
+                        <p class="text-white-50 mb-0" id="currentPath">cdnData/</p>
+                    </div>
+                    <div class="d-flex">
+                        <button class="btn btn-primary me-2" onclick="refreshFiles()">
+                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                        <button class="btn btn-outline-light" onclick="showUploadModal()">
+                            <i class="bi bi-upload"></i> 上传
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 面包屑导航 -->
+                <nav id="breadcrumbNav" class="breadcrumb-nav fade-in" style="display: none;">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="#" onclick="navigateTo('')">根目录</a></li>
+                        <!-- 动态面包屑将通过JavaScript生成 -->
+                    </ol>
+                </nav>
+                
+                <!-- 文件夹列表 -->
+                <div id="folderSection" class="mb-4 fade-in" style="display: none;">
+                    <h5 class="file-list-title mb-3"><i class="bi bi-folder2 me-2"></i>文件夹</h5>
+                    <div id="folderList" class="row">
+                        <!-- 文件夹将通过JavaScript动态加载 -->
+                    </div>
+                </div>
+                
+                <!-- 文件列表 -->
+                <div class="glass-card p-4 fade-in">
+                    <h5 class="file-list-title mb-3"><i class="bi bi-files me-2"></i>文件列表</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>类型</th>
+                                    <th>大小</th>
+                                    <th>修改时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileList">
+                                <tr>
+                                    <td colspan="5" class="text-center loading-text py-4">
+                                        <div class="spinner-border spinner-border-sm me-2" style="color: var(--file-list-color);"></div>
+                                        加载文件列表中...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 复制成功提示 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div id="copyToast" class="toast" role="alert">
+            <div class="toast-header bg-success text-white">
+                <i class="bi bi-check-circle me-2"></i>
+                <strong class="me-auto">成功</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body">
+                链接已复制到剪贴板！
+            </div>
+        </div>
+    </div>
+    
+    <!-- 上传模态框 -->
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-0">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title text-white"><i class="bi bi-cloud-upload me-2"></i>文件上传</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-white">
+                    <p>文件上传功能正在开发中...</p>
+                    <div class="text-center text-white-50">
+                        <i class="bi bi-tools" style="font-size: 3rem;"></i>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap & jQuery -->
+    <script src="https://cdifit.cn/cdn/jquery/jquery.min.js"></script>
+    <script src="https://cdifit.cn/cdn/bootstrap/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // 全局变量
+        let currentFiles = [];
+        let currentFolders = [];
+        let currentPath = '';
+        
+        // 切换侧边栏（移动端）
+        function toggleSidebar() {
+            document.body.classList.toggle('sidebar-open');
+        }
+        
+        // 导航到指定路径
+        function navigateTo(path) {
+            currentPath = path;
+            loadFiles(path);
+            updateBreadcrumb(path);
+        }
+        
+        // 加载文件列表
+        function loadFiles(path = '') {
+            const url = path ? `/api/files?path=${encodeURIComponent(path)}` : '/api/files';
+            
+            $.get(url)
+                .done(function(data) {
+                    updateFileList(data);
+                })
+                .fail(function(xhr, status, error) {
+                    $('#fileList').html('<tr><td colspan="5" class="text-center text-danger py-4">加载失败: ' + error + '</td></tr>');
+                });
+        }
+        
+        // 加载系统统计
+        function loadSystemStats() {
+            $.get('/api/stats')
+                .done(function(data) {
+                    updateSystemStats(data);
+                })
+                .fail(function(error) {
+                    console.error('加载系统统计失败:', error);
+                });
+        }
+        
+        // 更新文件列表
+        function updateFileList(data) {
+            currentFiles = data.files || [];
+            currentFolders = data.folders || [];
+            currentPath = data.current_path || '';
+            
+            // 更新统计信息
+            $('#folderCount').text(data.folder_count);
+            $('#fileCount').text(data.file_count);
+            $('#totalSize').text(data.total_size);
+            
+            // 更新当前路径显示
+            $('#currentPath').text(`cdnData/${currentPath}`.replace(/\/$/, ''));
+            
+            // 更新文件夹列表
+            updateFolderList(currentFolders);
+            
+            // 更新文件列表
+            updateFileTable(currentFiles);
+            
+            // 更新面包屑导航
+            updateBreadcrumb(currentPath);
+        }
+        
+        // 更新面包屑导航
+        function updateBreadcrumb(path) {
+            const breadcrumbNav = $('#breadcrumbNav');
+            const breadcrumb = $('.breadcrumb');
+            
+            if (!path) {
+                breadcrumbNav.hide();
+                return;
+            }
+            
+            breadcrumbNav.show();
+            breadcrumb.empty();
+            
+            // 添加根目录
+            breadcrumb.append('<li class="breadcrumb-item"><a href="#" onclick="navigateTo(\'\')">根目录</a></li>');
+            
+            // 添加路径各部分
+            const pathParts = path.split('/').filter(part => part !== '');
+            let accumulatedPath = '';
+            
+            pathParts.forEach((part, index) => {
+                accumulatedPath += (accumulatedPath ? '/' : '') + part;
+                if (index === pathParts.length - 1) {
+                    // 最后一部分，不添加链接
+                    breadcrumb.append(`<li class="breadcrumb-item active">${part}</li>`);
+                } else {
+                    breadcrumb.append(`<li class="breadcrumb-item"><a href="#" onclick="navigateTo('${accumulatedPath}')">${part}</a></li>`);
+                }
+            });
+        }
+        
+        // 更新文件夹列表
+        function updateFolderList(folders) {
+            const folderList = $('#folderList');
+            
+            if (folders.length === 0) {
+                $('#folderSection').hide();
+                return;
+            }
+            
+            $('#folderSection').show();
+            
+            let html = '';
+            folders.forEach(folder => {
+                const fullPath = currentPath ? `${currentPath}/${folder.name}` : folder.name;
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="folder-item" onclick="navigateTo('${fullPath}')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-folder-fill me-3 file-list-icon" style="font-size: 1.5rem;"></i>
+                                    <div>
+                                        <h6 class="mb-1">${folder.name}</h6>
+                                        <small>${folder.modified}</small>
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-light copy-btn" onclick="event.stopPropagation(); copyFolderUrl('${folder.path}')" title="复制文件夹路径">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            folderList.html(html);
+        }
+        
+        // 更新文件表格
+        function updateFileTable(files) {
+            const fileList = $('#fileList');
+            
+            if (files.length === 0) {
+                fileList.html('<tr><td colspan="5" class="text-center empty-text py-4">暂无文件</td></tr>');
+                return;
+            }
+            
+            let html = '';
+            files.forEach(file => {
+                const fileIcon = getFileIcon(file.type);
+                const fileUrl = '/download/' + encodeURIComponent(file.path);
+                const fileTypeBadge = getFileTypeBadge(file.type);
+                
+                html += `
+                    <tr class="file-item">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <i class="bi ${fileIcon} me-3 file-list-icon" style="font-size: 1.2rem;"></i>
+                                <div>
+                                    <div class="fw-medium">${file.name}</div>
+                                    <small>${file.path}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="badge ${fileTypeBadge}">${file.type}</span></td>
+                        <td class="text-nowrap">${file.size}</td>
+                        <td class="text-nowrap">${file.modified}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline-light copy-btn" onclick="copyFileUrl('${fileUrl}')" title="复制链接">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                                <a href="${fileUrl}" class="btn btn-sm btn-primary" download title="下载文件">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            fileList.html(html);
+        }
+        
+        // 更新系统统计
+        function updateSystemStats(data) {
+            if (data.error) {
+                console.error('系统统计错误:', data.error);
+                return;
+            }
+            
+            // 更新内存使用
+            if (data.memory) {
+                $('#memoryPercent').text(data.memory.percent.toFixed(1) + '%');
+                $('#memoryProgress').css('width', data.memory.percent + '%');
+            }
+            
+            // 更新磁盘使用
+            if (data.disk) {
+                $('#diskPercent').text(data.disk.percent.toFixed(1) + '%');
+                $('#diskProgress').css('width', data.disk.percent + '%');
+            }
+            
+            // 更新运行时间
+            if (data.uptime) {
+                $('#serverUptime').text('运行时间: ' + data.uptime);
+            }
+        }
+        
+        // 获取文件图标
+        function getFileIcon(type) {
+            const icons = {
+                'image': 'bi-file-image',
+                'document': 'bi-file-text',
+                'text': 'bi-file-text',
+                'archive': 'bi-file-zip',
+                'video': 'bi-file-play',
+                'audio': 'bi-file-music',
+                'executable': 'bi-gear',
+                'file': 'bi-file-earmark'
+            };
+            return icons[type] || 'bi-file-earmark';
+        }
+        
+        // 获取文件类型徽章
+        function getFileTypeBadge(type) {
+            const badges = {
+                'image': 'badge-image',
+                'document': 'badge-document',
+                'text': 'badge-document',
+                'archive': 'badge-archive',
+                'video': 'badge-video',
+                'audio': 'badge-audio',
+                'executable': 'badge-executable',
+                'file': 'badge-file'
+            };
+            return badges[type] || 'badge-file';
+        }
+        
+        // 复制文件URL
+        function copyFileUrl(url) {
+            const fullUrl = window.location.origin + url;
+            copyToClipboard(fullUrl);
+        }
+        
+        // 复制文件夹路径
+        function copyFolderUrl(path) {
+            const fullUrl = window.location.origin + '/download/' + encodeURIComponent(path);
+            copyToClipboard(fullUrl);
+        }
+        
+        // 复制到剪贴板
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('链接已复制到剪贴板！');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                // 备用复制方法
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showToast('链接已复制到剪贴板！');
+            });
+        }
+        
+        // 显示提示
+        function showToast(message) {
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            document.querySelector('.toast-body').textContent = message;
+            toast.show();
+        }
+        
+        // 刷新文件列表
+        function refreshFiles() {
+            $('#fileList').html('<tr><td colspan="5" class="text-center loading-text py-4"><div class="spinner-border spinner-border-sm me-2" style="color: var(--file-list-color);"></div>刷新中...</td></tr>');
+            loadFiles(currentPath);
+            loadSystemStats();
+        }
+        
+        // 显示上传模态框
+        function showUploadModal() {
+            const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
+            modal.show();
+        }
+        
+        // 页面加载完成后初始化
+        $(document).ready(function() {
+            // 初始加载
+            loadFiles();
+            loadSystemStats();
+            
+            // 每30秒自动刷新一次文件列表
+            setInterval(() => loadFiles(currentPath), 30000);
+            
+            // 每60秒自动刷新一次系统统计
+            setInterval(loadSystemStats, 60000);
+            
+            // 添加键盘快捷键
+            $(document).keydown(function(e) {
+                // F5 刷新
+                if (e.key === 'F5') {
+                    e.preventDefault();
+                    refreshFiles();
+                }
+                // ESC 关闭侧边栏（移动端）
+                if (e.key === 'Escape' && window.innerWidth < 992) {
+                    document.body.classList.remove('sidebar-open');
+                }
+                // Backspace 返回上级目录
+                if (e.key === 'Backspace' && !e.target.matches('input, textarea')) {
+                    e.preventDefault();
+                    if (currentPath) {
+                        const pathParts = currentPath.split('/');
+                        pathParts.pop();
+                        const parentPath = pathParts.join('/');
+                        navigateTo(parentPath);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
