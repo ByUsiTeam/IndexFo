@@ -48,7 +48,7 @@ CONFIG = {
     "blur_intensity": "25px",
     "site_title": "ByUsiCDN - Index Fo",
     "html_file": "index.html",
-    "protected_paths": ["/api"]
+    "protected_paths": ["/api/secret", "/api/admin"]
 }
 
 class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -80,7 +80,7 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ByUsiCDN - 错误</title>
+    <title>ByUsiCDN - Error</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
         .error { color: #FF0000; background: #ffe6e6; padding: 20px; border-radius: 10px; }
@@ -88,8 +88,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
 </head>
 <body>
     <div class="error">
-        <h1>⚠️ 系统错误</h1>
-        <p>无法加载界面模板，请检查 index.html 文件是否存在</p>
+        <h1>⚠️ System Error</h1>
+        <p>Cannot load interface template, please check if index.html file exists</p>
     </div>
 </body>
 </html>'''
@@ -109,21 +109,19 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             super().log_error(format, *args)
     
     def translate_path(self, path):
-        """重写路径转换，将根路径映射到 cdnData 目录"""
-        # 检查保护路径
-        for protected_path in self.protected_paths:
-            if path.startswith(protected_path):
-                self.log_error("尝试访问保护路径: %s", path)
-                return "/dev/null"  # 返回不存在的路径
-        
+        """重写路径转换，将所有非API路径映射到 cdnData 目录"""
         # 解析路径
         path = urllib.parse.unquote(path)
         path = path.split('?', 1)[0]
         path = path.split('#', 1)[0]
         
-        # 特殊路径处理
+        # 检查是否是API路径
+        if path.startswith('/api/'):
+            # API路径不进行映射，返回不存在的路径
+            return "/dev/null"
+        
+        # 特殊路径处理 - 根路径返回首页
         if path in ['/', '']:
-            # 根路径返回首页
             return str(Path.cwd() / CONFIG["html_file"])
         
         # 将URL路径映射到cdnData目录
@@ -137,10 +135,50 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
         try:
             file_path.resolve().relative_to(self.cdn_path.resolve())
         except ValueError:
-            self.log_error("路径遍历攻击尝试: %s", path)
+            self.log_error("Path traversal attempt: %s", path)
             return "/dev/null"
         
         return str(file_path)
+    
+    def send_error_response(self, code, message):
+        """发送错误响应，处理编码问题"""
+        try:
+            # 使用英文消息避免编码问题
+            error_messages = {
+                403: "Forbidden - Access Denied",
+                404: "File Not Found", 
+                500: "Internal Server Error"
+            }
+            english_message = error_messages.get(code, "Error")
+            
+            self.send_response(code)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            
+            error_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Error {code}</title>
+                <meta charset="utf-8">
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 50px; text-align: center; }}
+                    .error {{ color: #FF0000; background: #ffe6e6; padding: 20px; border-radius: 10px; }}
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h1>Error {code}</h1>
+                    <p>{english_message}</p>
+                    <p><small>{message}</small></p>
+                </div>
+            </body>
+            </html>
+            """
+            self.wfile.write(error_html.encode('utf-8'))
+        except Exception as e:
+            # 如果自定义错误也失败，使用原始方法
+            super().send_error(code, english_message)
     
     def do_GET(self):
         """处理GET请求"""
@@ -149,10 +187,10 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             path = parsed_path.path
             query_params = urllib.parse.parse_qs(parsed_path.query)
             
-            # 检查保护路径
+            # 检查保护路径 - 只保护特定的API路径
             for protected_path in self.protected_paths:
-                if path.startswith(protected_path):
-                    self.send_error(403, "禁止访问保护目录")
+                if path == protected_path:
+                    self.send_error_response(403, "Protected directory access denied")
                     return
             
             if path == '/':
@@ -171,41 +209,56 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # 文件夹导航API
                 target_path = query_params.get('path', [''])[0]
                 self.serve_navigate_api(target_path)
+            elif path.startswith('/api/'):
+                # 其他API路径返回404
+                self.send_error_response(404, f"API endpoint not found: {path}")
             else:
-                # 文件服务 - 使用自定义的路径映射
-                self.serve_static_file(path)
+                # 所有非API请求都映射到cdnData目录
+                self.serve_cdn_file(path)
                 
         except Exception as e:
-            self.log_error("处理请求时出错: %s", str(e))
-            self.send_error(500, f"服务器内部错误: {str(e)}")
+            self.log_error("Request processing error: %s", str(e))
+            self.send_error_response(500, f"Server error: {str(e)}")
     
-    def serve_static_file(self, path):
-        """服务静态文件"""
+    def serve_cdn_file(self, path):
+        """服务CDN文件 - 直接映射到cdnData目录"""
         try:
             # 使用translate_path获取实际文件路径
             file_path = self.translate_path(path)
             
             # 检查文件是否存在
             if not os.path.exists(file_path) or file_path == "/dev/null":
-                self.send_error(404, "文件不存在")
+                self.send_error_response(404, f"File not found: {path}")
+                return
+            
+            # 如果是目录，返回文件列表页面
+            if os.path.isdir(file_path):
+                # 对于目录，我们返回首页，但注入路径参数
+                relative_path = path[1:] if path.startswith('/') else path
+                self.serve_index(relative_path)
                 return
             
             # 确定MIME类型
-            ext = os.path.splitext(file_path)[1]
+            ext = os.path.splitext(file_path)[1].lower()
             mime_types = {
-                '.txt': 'text/plain',
-                '.html': 'text/html',
-                '.css': 'text/css',
-                '.js': 'application/javascript',
+                '.txt': 'text/plain; charset=utf-8',
+                '.html': 'text/html; charset=utf-8',
+                '.htm': 'text/html; charset=utf-8',
+                '.css': 'text/css; charset=utf-8',
+                '.js': 'application/javascript; charset=utf-8',
                 '.png': 'image/png',
                 '.jpg': 'image/jpeg',
                 '.jpeg': 'image/jpeg',
                 '.gif': 'image/gif',
                 '.pdf': 'application/pdf',
-                '.zip': 'application/zip'
+                '.zip': 'application/zip',
+                '.ico': 'image/x-icon',
+                '.svg': 'image/svg+xml',
+                '.json': 'application/json',
+                '.xml': 'application/xml'
             }
             
-            content_type = mime_types.get(ext.lower(), 'application/octet-stream')
+            content_type = mime_types.get(ext, 'application/octet-stream')
             
             # 读取并发送文件
             with open(file_path, 'rb') as f:
@@ -219,8 +272,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(file_data)
             
         except Exception as e:
-            self.log_error("服务文件时出错: %s", str(e))
-            self.send_error(500, f"服务文件时出错: {str(e)}")
+            self.log_error("File serving error: %s", str(e))
+            self.send_error_response(500, f"File serving error: {str(e)}")
     
     def serve_index(self, target_path: str = ""):
         """服务首页，支持路径参数"""
@@ -233,8 +286,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(html_content.encode('utf-8'))
         except Exception as e:
-            self.log_error("服务首页时出错: %s", str(e))
-            self.send_error(500, f"服务首页时出错: {str(e)}")
+            self.log_error("Index serving error: %s", str(e))
+            self.send_error_response(500, f"Index serving error: {str(e)}")
     
     def inject_path_parameter(self, html_content: str, path: str) -> str:
         """将路径参数注入到HTML中"""
@@ -266,8 +319,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(files_data, ensure_ascii=False).encode('utf-8'))
         except Exception as e:
-            self.log_error("扫描文件夹时出错: %s", str(e))
-            self.send_error(500, f"扫描文件夹时出错: {str(e)}")
+            self.log_error("Folder scanning error: %s", str(e))
+            self.send_error_response(500, f"Folder scanning error: {str(e)}")
     
     def serve_navigate_api(self, target_path: str = ""):
         """服务文件夹导航API"""
@@ -279,8 +332,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(navigation_data, ensure_ascii=False).encode('utf-8'))
         except Exception as e:
-            self.log_error("导航文件夹时出错: %s", str(e))
-            self.send_error(500, f"导航文件夹时出错: {str(e)}")
+            self.log_error("Navigation error: %s", str(e))
+            self.send_error_response(500, f"Navigation error: {str(e)}")
     
     def serve_stats_api(self):
         """服务统计信息API"""
@@ -292,8 +345,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(stats, ensure_ascii=False).encode('utf-8'))
         except Exception as e:
-            self.log_error("获取统计信息时出错: %s", str(e))
-            self.send_error(500, f"获取统计信息时出错: {str(e)}")
+            self.log_error("Stats error: %s", str(e))
+            self.send_error_response(500, f"Stats error: {str(e)}")
     
     def serve_file_download(self, path):
         """服务文件下载"""
@@ -305,11 +358,11 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 file_path.resolve().relative_to(self.cdn_path.resolve())
             except ValueError:
-                self.send_error(403, "禁止访问")
+                self.send_error_response(403, "Access denied")
                 return
             
             if not file_path.exists() or not file_path.is_file():
-                self.send_error(404, "文件不存在")
+                self.send_error_response(404, "File not found")
                 return
             
             # 设置下载头
@@ -324,8 +377,8 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
                 
         except Exception as e:
-            self.log_error("下载文件时出错: %s", str(e))
-            self.send_error(500, f"下载文件时出错: {str(e)}")
+            self.log_error("Download error: %s", str(e))
+            self.send_error_response(500, f"Download error: {str(e)}")
     
     def scan_cdn_folder(self, relative_path: str = "") -> Dict[str, Any]:
         """扫描CDN文件夹"""
@@ -385,7 +438,7 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                     folder_count += 1
         
         except Exception as e:
-            self.log_error("扫描文件夹时发生错误: %s", str(e))
+            self.log_error("Folder scanning error: %s", str(e))
         
         return {
             "files": sorted(files_data, key=lambda x: x["name"].lower()),
@@ -433,7 +486,7 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
             
             stats = {
                 "system": system_info,
-                "uptime": "未知"
+                "uptime": "Unknown"
             }
             
             if HAS_PSUTIL:
@@ -459,7 +512,7 @@ class ByUsiCDNRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "uptime": str(uptime).split('.')[0]  # 去除微秒部分
                 })
             else:
-                stats["error"] = "需要psutil库来获取完整系统信息"
+                stats["error"] = "psutil library required for full system info"
                 
             return stats
         except Exception as e:
@@ -494,7 +547,7 @@ def display_banner():
     """显示启动横幅"""
     if not HAS_RICH:
         print("\n" + "="*50)
-        print("      ByUsiCDN - Index Fo 服务器")
+        print("      ByUsiCDN - Index Fo Server")
         print("="*50)
         return
     
@@ -505,7 +558,7 @@ def display_banner():
     banner_table.add_row("[bold red]╠═╝║ ║║  ║ ║╣  ║ ╠═╣║  ║╣ [/bold red]")
     banner_table.add_row("[bold red]╩  ╚═╝╩═╝╩ ╚═╝ ╩ ╩ ╩╩═╝╚═╝[/bold red]")
     banner_table.add_row("")
-    banner_table.add_row("[bold cyan]CDN 文件索引和分发系统[/bold cyan]")
+    banner_table.add_row("[bold cyan]CDN File Index and Distribution System[/bold cyan]")
     
     console.print(Panel(banner_table, style="bold red", padding=(1, 4)))
     
@@ -514,13 +567,13 @@ def display_banner():
     info_table.add_column(style="bold cyan", justify="right")
     info_table.add_column(style="white")
     
-    info_table.add_row("访问地址:", f"http://{CONFIG['host']}:{CONFIG['port']}")
-    info_table.add_row("数据文件夹:", str(Path(CONFIG['cdn_data_folder']).absolute()))
-    info_table.add_row("保护路径:", ", ".join(CONFIG['protected_paths']))
-    info_table.add_row("主题颜色:", CONFIG['theme_color'])
-    info_table.add_row("模糊效果:", CONFIG['blur_intensity'])
+    info_table.add_row("Access URL:", f"http://{CONFIG['host']}:{CONFIG['port']}")
+    info_table.add_row("Data Folder:", str(Path(CONFIG['cdn_data_folder']).absolute()))
+    info_table.add_row("CDN Mapping:", "All non-API paths → ./cdnData/")
+    info_table.add_row("Protected Paths:", ", ".join(CONFIG['protected_paths']))
+    info_table.add_row("Theme Color:", CONFIG['theme_color'])
     
-    console.print(Panel(info_table, title="📋 配置信息", border_style="cyan"))
+    console.print(Panel(info_table, title="📋 Configuration Info", border_style="cyan"))
 
 def main():
     """主函数"""
@@ -532,8 +585,8 @@ def main():
         # 检查HTML文件是否存在
         html_file = Path(CONFIG["html_file"])
         if not html_file.exists():
-            console.print(f"\n[bold yellow]⚠️  警告: HTML文件 {CONFIG['html_file']} 不存在[/bold yellow]")
-            console.print("[yellow]服务器将继续运行，但界面可能无法正常显示[/yellow]")
+            console.print(f"\n[bold yellow]⚠️  Warning: HTML file {CONFIG['html_file']} does not exist[/bold yellow]")
+            console.print("[yellow]Server will continue running but interface may not display properly[/yellow]")
         
         # 显示启动横幅
         display_banner()
@@ -544,32 +597,37 @@ def main():
         # 创建服务器
         with socketserver.TCPServer((CONFIG["host"], CONFIG["port"]), handler) as httpd:
             if HAS_RICH:
-                console.print(f"\n🎉 [bold green]服务器启动成功![/bold green]")
-                console.print(f"\n📁 文件访问示例:")
-                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/i.txt")
-                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/your-file.pdf")
-                console.print(f"\n⛔ 保护路径:")
+                console.print(f"\n🎉 [bold green]Server started successfully![/bold green]")
+                console.print(f"\n📁 CDN File Access Examples:")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/              → {cdn_path.absolute()}/")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/file.txt      → {cdn_path.absolute()}/file.txt")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/folder/       → {cdn_path.absolute()}/folder/")
+                console.print(f"\n📊 API endpoints:")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/api/files")
+                console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}/api/stats")
+                console.print(f"\n⛔ Protected paths:")
                 for path in CONFIG['protected_paths']:
                     console.print(f"   http://{CONFIG['host']}:{CONFIG['port']}{path}")
-                console.print(f"\n⏹️  [bold yellow]按 Ctrl+C 停止服务器[/bold yellow]\n")
+                console.print(f"\n⏹️  [bold yellow]Press Ctrl+C to stop server[/bold yellow]\n")
             else:
-                print(f"\n服务器启动成功!")
-                print(f"文件访问示例: http://{CONFIG['host']}:{CONFIG['port']}/i.txt")
-                print(f"按 Ctrl+C 停止服务器\n")
+                print(f"\nServer started successfully!")
+                print(f"CDN File Access Examples:")
+                print(f"  http://{CONFIG['host']}:{CONFIG['port']}/ → {cdn_path.absolute()}/")
+                print(f"Press Ctrl+C to stop server\n")
             
             # 启动服务器
             httpd.serve_forever()
             
     except KeyboardInterrupt:
         if HAS_RICH:
-            console.print(f"\n\n[bold yellow]👋 服务器已安全停止[/bold yellow]")
+            console.print(f"\n\n[bold yellow]👋 Server stopped safely[/bold yellow]")
         else:
-            print(f"\n\n服务器已安全停止")
+            print(f"\n\nServer stopped safely")
     except Exception as e:
         if HAS_RICH:
-            console.print(f"\n[bold red]❌ 启动服务器时出错: {e}[/bold red]")
+            console.print(f"\n[bold red]❌ Server startup error: {e}[/bold red]")
         else:
-            print(f"\n启动服务器时出错: {e}")
+            print(f"\nServer startup error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
